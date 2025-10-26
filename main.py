@@ -3,17 +3,32 @@ import pandas as pd
 import firebase_admin
 from firebase_admin import credentials, firestore
 import time
+import json
+
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(page_title="Student Edge Assessment", layout="wide")
+st.title("🧠 Student Edge Assessment Portal")
 
 # ---------------- FIREBASE CONNECTION ----------------
 @st.cache_resource
 def init_firebase():
     try:
         if not firebase_admin._apps:
-            # Use the CORRECT secret name that matches your secrets.toml
-            cred_dict = dict(st.secrets["firebase"])
-            cred = credentials.Certificate(cred_dict)
-            firebase_admin.initialize_app(cred)
+            # ✅ Priority 1: Read from Streamlit Secrets (Cloud)
+            if "firebase" in st.secrets:
+                cred_dict = dict(st.secrets["firebase"])
+                cred = credentials.Certificate(cred_dict)
+                firebase_admin.initialize_app(cred)
+
+            # ✅ Priority 2: Fallback to local JSON file (for local dev)
+            else:
+                with open("firebase_key.json", "r", encoding="utf-8") as f:
+                    firebase_config = json.load(f)
+                cred = credentials.Certificate(firebase_config)
+                firebase_admin.initialize_app(cred)
+
         return firestore.client()
+
     except Exception as e:
         st.error(f"❌ Firebase initialization failed: {e}")
         return None
@@ -27,10 +42,6 @@ files = {
     "Communication Skills - Objective": "communication_skills_objective.csv",
     "Communication Skills - Descriptive": "communication_skills_descriptive.csv",
 }
-
-# ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="Student Edge Assessment", layout="wide")
-st.title("🧠 Student Edge Assessment Portal")
 
 # ---------------- STUDENT DETAILS ----------------
 name = st.text_input("Enter Your Name")
