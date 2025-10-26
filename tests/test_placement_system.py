@@ -96,6 +96,14 @@ class TestPlacementSystem(unittest.TestCase):
         self.assertIn("Test Student", report)
         self.assertIn("Total Students: 1", report)
     
+    def test_generate_report_empty_system(self):
+        """Test report generation with no students."""
+        report = self.system.generate_report()
+        
+        self.assertIn("PLACEMENT SKILL TEST REPORT", report)
+        self.assertIn("Total Students: 0", report)
+        self.assertIn("N/A (no students)", report)
+    
     def test_save_results(self):
         """Test saving results to JSON file."""
         student = self.system.register_student("Test Student", "TEST001", "UG", "CSE")

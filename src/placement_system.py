@@ -107,7 +107,12 @@ class PlacementSystem:
         
         eligible_students = self.get_eligible_students()
         report += f"Eligible for Placement: {len(eligible_students)}\n"
-        report += f"Eligibility Rate: {(len(eligible_students)/len(self.students)*100):.1f}%\n\n"
+        
+        if len(self.students) > 0:
+            eligibility_rate = (len(eligible_students)/len(self.students)*100)
+            report += f"Eligibility Rate: {eligibility_rate:.1f}%\n\n"
+        else:
+            report += "Eligibility Rate: N/A (no students)\n\n"
         
         report += "="*60 + "\n"
         report += "INDIVIDUAL STUDENT REPORTS\n"
