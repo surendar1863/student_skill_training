@@ -2,7 +2,6 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore
 import gspread
-import json
 from datetime import datetime
 
 st.set_page_config(page_title="Student Edge Assessment", layout="wide")
@@ -13,22 +12,22 @@ st.title("🎓 Student Edge Assessment Portal")
 def init_firebase():
     try:
         # Check if secrets exist
-        if "firebase_service_account" not in st.secrets:
-            st.error("❌ Firebase service account secrets not found")
+        if "firebase" not in st.secrets:
+            st.error("❌ Firebase secrets not found in Streamlit secrets")
             return None
         
-        # Get service account info from secrets
+        # Create service account dict from secrets
         service_account_info = {
-            "type": st.secrets["firebase_service_account"]["type"],
-            "project_id": st.secrets["firebase_service_account"]["project_id"],
-            "private_key_id": st.secrets["firebase_service_account"]["private_key_id"],
-            "private_key": st.secrets["firebase_service_account"]["private_key"].replace('\\n', '\n'),
-            "client_email": st.secrets["firebase_service_account"]["client_email"],
-            "client_id": st.secrets["firebase_service_account"]["client_id"],
-            "auth_uri": st.secrets["firebase_service_account"]["auth_uri"],
-            "token_uri": st.secrets["firebase_service_account"]["token_uri"],
-            "auth_provider_x509_cert_url": st.secrets["firebase_service_account"]["auth_provider_x509_cert_url"],
-            "client_x509_cert_url": st.secrets["firebase_service_account"]["client_x509_cert_url"]
+            "type": "service_account",
+            "project_id": st.secrets["firebase"]["project_id"],
+            "private_key_id": st.secrets["firebase"]["private_key_id"],
+            "private_key": st.secrets["firebase"]["private_key"].replace('\\n', '\n'),
+            "client_email": st.secrets["firebase"]["client_email"],
+            "client_id": st.secrets["firebase"]["client_id"],
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"]
         }
         
         # Initialize Firebase
@@ -39,7 +38,6 @@ def init_firebase():
         return firestore.client()
     except Exception as e:
         st.error(f"❌ Firebase initialization failed: {str(e)}")
-        st.info("💡 Check that your service account key is properly formatted in Streamlit secrets")
         return None
 
 db = init_firebase()
@@ -50,16 +48,16 @@ def connect_sheet(sheet_name="Student_Responses"):
     try:
         # Use the same service account for Sheets
         service_account_info = {
-            "type": st.secrets["firebase_service_account"]["type"],
-            "project_id": st.secrets["firebase_service_account"]["project_id"],
-            "private_key_id": st.secrets["firebase_service_account"]["private_key_id"],
-            "private_key": st.secrets["firebase_service_account"]["private_key"].replace('\\n', '\n'),
-            "client_email": st.secrets["firebase_service_account"]["client_email"],
-            "client_id": st.secrets["firebase_service_account"]["client_id"],
-            "auth_uri": st.secrets["firebase_service_account"]["auth_uri"],
-            "token_uri": st.secrets["firebase_service_account"]["token_uri"],
-            "auth_provider_x509_cert_url": st.secrets["firebase_service_account"]["auth_provider_x509_cert_url"],
-            "client_x509_cert_url": st.secrets["firebase_service_account"]["client_x509_cert_url"]
+            "type": "service_account",
+            "project_id": st.secrets["firebase"]["project_id"],
+            "private_key_id": st.secrets["firebase"]["private_key_id"],
+            "private_key": st.secrets["firebase"]["private_key"].replace('\\n', '\n'),
+            "client_email": st.secrets["firebase"]["client_email"],
+            "client_id": st.secrets["firebase"]["client_id"],
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"]
         }
         
         gc = gspread.service_account_from_dict(service_account_info)
@@ -67,7 +65,6 @@ def connect_sheet(sheet_name="Student_Responses"):
         return sh.sheet1
     except Exception as e:
         st.error(f"❌ Google Sheets connection failed: {e}")
-        st.info("💡 Make sure you've shared the Google Sheet with your service account email")
         return None
 
 sheet = connect_sheet()
