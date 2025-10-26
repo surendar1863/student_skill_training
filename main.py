@@ -4,8 +4,6 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import time
 import json
-st.write("Secrets keys detected:", list(st.secrets.keys()))
-
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Student Edge Assessment", layout="wide")
 st.title("🧠 Student Edge Assessment Portal")
@@ -21,7 +19,6 @@ def init_firebase():
                 firebase_config = dict(st.secrets["firebase"])
                 cred = credentials.Certificate(firebase_config)
                 firebase_admin.initialize_app(cred)
-                st.success("✅ Firebase connected using Streamlit secrets!")
             else:
                 # ✅ Only used locally when secrets aren't available
                 st.warning("⚠️ Using local firebase_key.json (not found on cloud).")
@@ -169,5 +166,6 @@ st.markdown("""
     ⬆️ Back to Top
 </button>
 """, unsafe_allow_html=True)
+
 
 
