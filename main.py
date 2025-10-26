@@ -12,27 +12,30 @@ st.title("🧠 Student Edge Assessment Portal")
 
 # ---------------- FIREBASE CONNECTION ----------------
 @st.cache_resource
+@st.cache_resource
 def init_firebase():
     try:
         if not firebase_admin._apps:
-            # ✅ Priority 1: Read from Streamlit Secrets (Cloud)
+            # ✅ Use secrets when deployed on Streamlit Cloud
             if "firebase" in st.secrets:
-                cred_dict = dict(st.secrets["firebase"])
-                cred = credentials.Certificate(cred_dict)
+                firebase_config = dict(st.secrets["firebase"])
+                cred = credentials.Certificate(firebase_config)
                 firebase_admin.initialize_app(cred)
-
-            # ✅ Priority 2: Fallback to local JSON file (for local dev)
+                st.success("✅ Firebase connected using Streamlit secrets!")
             else:
+                # ✅ Only used locally when secrets aren't available
+                st.warning("⚠️ Using local firebase_key.json (not found on cloud).")
+                import json
                 with open("firebase_key.json", "r", encoding="utf-8") as f:
                     firebase_config = json.load(f)
                 cred = credentials.Certificate(firebase_config)
                 firebase_admin.initialize_app(cred)
 
         return firestore.client()
-
     except Exception as e:
         st.error(f"❌ Firebase initialization failed: {e}")
         return None
+
 
 db = init_firebase()
 
@@ -166,4 +169,5 @@ st.markdown("""
     ⬆️ Back to Top
 </button>
 """, unsafe_allow_html=True)
+
 
