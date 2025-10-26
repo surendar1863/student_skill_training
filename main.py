@@ -4,16 +4,21 @@ from firebase_admin import credentials, firestore
 import pandas as pd
 from datetime import datetime
 from io import BytesIO
+import json
+import os
 
 st.set_page_config(page_title="Student Edge Assessment", layout="wide")
 st.title("🎓 Student Edge Assessment Portal")
 
-# ---------------------- FIREBASE ONLY ----------------------
+# ---------------------- FIREBASE SETUP ----------------------
 @st.cache_resource
 def init_firebase():
     try:
-        if not firebase_admin._apps:
-            # Use a simpler approach with direct secrets
+        # Method 1: Check for service account JSON file
+        if os.path.exists("serviceAccountKey.json"):
+            cred = credentials.Certificate("serviceAccountKey.json")
+        # Method 2: Check for secrets as fallback
+        elif "firebase" in st.secrets:
             cred_dict = {
                 "type": st.secrets["firebase"]["type"],
                 "project_id": st.secrets["firebase"]["project_id"],
@@ -27,22 +32,66 @@ def init_firebase():
                 "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"]
             }
             cred = credentials.Certificate(cred_dict)
+        else:
+            st.error("❌ No Firebase credentials found. Please add serviceAccountKey.json file.")
+            return None
+        
+        if not firebase_admin._apps:
             firebase_admin.initialize_app(cred)
+        
+        st.success("✅ Firebase connected successfully!")
         return firestore.client()
+        
     except Exception as e:
-        st.error(f"❌ Firebase init failed: {e}")
+        st.error(f"❌ Firebase initialization failed: {str(e)}")
+        st.info("💡 Please check your service account credentials")
         return None
 
 db = init_firebase()
 
-# ---------------------- DOWNLOAD DATA AS EXCEL ----------------------
-def download_excel():
+# ---------------------- LOCAL JSON BACKUP ----------------------
+def save_to_local_backup(data):
+    """Save data to local JSON file as backup"""
+    try:
+        backup_file = "local_responses.json"
+        
+        # Load existing data
+        if os.path.exists(backup_file):
+            with open(backup_file, 'r') as f:
+                existing_data = json.load(f)
+        else:
+            existing_data = []
+        
+        # Add new data
+        existing_data.append(data)
+        
+        # Save back to file
+        with open(backup_file, 'w') as f:
+            json.dump(existing_data, f, indent=2)
+        
+        return True
+    except Exception as e:
+        st.error(f"Local backup failed: {e}")
+        return False
+
+def get_local_data():
+    """Get data from local backup"""
+    try:
+        backup_file = "local_responses.json"
+        if os.path.exists(backup_file):
+            with open(backup_file, 'r') as f:
+                return json.load(f)
+        return []
+    except:
+        return []
+
+# ---------------------- DOWNLOAD FUNCTIONS ----------------------
+def download_excel_from_firestore():
+    """Download data from Firestore as Excel"""
     try:
         if not db:
-            st.error("Firebase not connected")
             return None
             
-        # Get all data from Firestore
         responses_ref = db.collection("student_responses")
         docs = responses_ref.stream()
         
@@ -60,41 +109,80 @@ def download_excel():
         
         if data:
             df = pd.DataFrame(data)
-            
-            # Create Excel file in memory
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df.to_excel(writer, sheet_name='Student Responses', index=False)
-                
-                # Auto-adjust column widths
-                worksheet = writer.sheets['Student Responses']
-                for i, col in enumerate(df.columns):
-                    max_len = max(df[col].astype(str).str.len().max(), len(col)) + 2
-                    worksheet.set_column(i, i, max_len)
-            
             output.seek(0)
             return output
-        else:
-            st.warning("No data available to download")
-            return None
+        return None
     except Exception as e:
-        st.error(f"Error generating Excel file: {e}")
+        st.error(f"Firestore download error: {e}")
         return None
 
-# ---------------------- ADMIN DOWNLOAD SECTION ----------------------
-st.sidebar.title("Admin Panel")
-if st.sidebar.button("📥 Download Excel Report"):
-    excel_file = download_excel()
+def download_excel_from_local():
+    """Download data from local backup as Excel"""
+    try:
+        local_data = get_local_data()
+        if local_data:
+            # Convert to the same format
+            formatted_data = []
+            for item in local_data:
+                formatted_data.append({
+                    "Timestamp": item.get("Timestamp", ""),
+                    "Name": item.get("Name", ""),
+                    "Roll Number": item.get("Roll", ""),
+                    "Section": item.get("Section", ""),
+                    "Problem Solving Response": item.get("Responses", {}).get("Q1", ""),
+                    "Adaptability Rating": item.get("Responses", {}).get("Q2", "")
+                })
+            
+            df = pd.DataFrame(formatted_data)
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, sheet_name='Student Responses', index=False)
+            output.seek(0)
+            return output
+        return None
+    except Exception as e:
+        st.error(f"Local download error: {e}")
+        return None
+
+# ---------------------- ADMIN PANEL ----------------------
+st.sidebar.title("📊 Admin Panel")
+
+# Download from Firestore
+if st.sidebar.button("📥 Download from Firestore"):
+    excel_file = download_excel_from_firestore()
     if excel_file:
         st.sidebar.download_button(
-            label="⬇️ Download Excel File",
+            label="⬇️ Download Firestore Data",
             data=excel_file,
-            file_name=f"student_responses_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+            file_name=f"firestore_responses_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+    else:
+        st.sidebar.warning("No data in Firestore")
+
+# Download from local backup
+if st.sidebar.button("💾 Download Local Backup"):
+    excel_file = download_excel_from_local()
+    if excel_file:
+        st.sidebar.download_button(
+            label="⬇️ Download Local Data",
+            data=excel_file,
+            file_name=f"local_backup_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.sidebar.warning("No local backup data")
+
+# Show data statistics
+local_data = get_local_data()
+if local_data:
+    st.sidebar.info(f"📈 Local backup: {len(local_data)} responses")
 
 # ---------------------- STUDENT FORM ----------------------
-st.header("Student Response Form")
+st.header("📝 Student Response Form")
 
 with st.form("student_form"):
     col1, col2 = st.columns(2)
@@ -131,44 +219,31 @@ if submitted:
         },
     }
 
-    try:
-        # Save to Firestore only
-        doc_ref = db.collection("student_responses").document(f"{roll}_{section}")
-        doc_ref.set(data)
-        
-        st.success("✅ Response submitted successfully!")
+    success = False
+    
+    # Try Firestore first
+    if db:
+        try:
+            doc_ref = db.collection("student_responses").document(f"{roll}_{section}")
+            doc_ref.set(data)
+            st.success("✅ Response submitted to Firestore!")
+            success = True
+        except Exception as e:
+            st.error(f"❌ Firestore save failed: {e}")
+    
+    # Always save to local backup
+    if save_to_local_backup(data):
+        st.success("✅ Response saved to local backup!")
+        success = True
+    
+    if success:
         st.balloons()
-        
-        # Show confirmation
         st.info(f"""
-        **Submission Details:**
+        **Submission Confirmed:**
         - Name: {name}
         - Roll Number: {roll}
         - Section: {section}
-        - Submitted at: {timestamp}
+        - Time: {timestamp}
         """)
-        
-    except Exception as e:
-        st.error(f"❌ Error saving data: {e}")
-        st.info("Please try again in a few moments.")
-
-# ---------------------- LIVE DATA PREVIEW ----------------------
-st.sidebar.header("Data Preview")
-if st.sidebar.button("🔄 Refresh Data"):
-    try:
-        responses_ref = db.collection("student_responses")
-        docs = responses_ref.limit(5).stream()  # Show last 5 entries
-        
-        recent_data = []
-        for doc in docs:
-            doc_data = doc.to_dict()
-            recent_data.append(doc_data)
-        
-        if recent_data:
-            st.sidebar.write("**Recent Submissions:**")
-            for data in recent_data:
-                st.sidebar.write(f"• {data.get('Name')} - {data.get('Roll')}")
-        else:
-            st.sidebar.write("No submissions yet")
-    except Exception as e:
-        st.sidebar.error("Error loading data")
+    else:
+        st.error("❌ Failed to save data. Please contact administrator.")
