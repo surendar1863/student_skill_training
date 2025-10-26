@@ -4,6 +4,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import time
 import json
+st.write("Secrets keys detected:", list(st.secrets.keys()))
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Student Edge Assessment", layout="wide")
@@ -165,3 +166,4 @@ st.markdown("""
     ⬆️ Back to Top
 </button>
 """, unsafe_allow_html=True)
+
