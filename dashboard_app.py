@@ -1,116 +1,181 @@
 import streamlit as st
+import firebase_admin
+from firebase_admin import credentials, firestore
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
+import json
+from datetime import datetime
 
+# ---------------- FIREBASE INIT ----------------
+try:
+    firebase_config = json.loads(st.secrets["firebase_key"])
+    cred = credentials.Certificate(firebase_config)
+except Exception:
+    cred = credentials.Certificate("firebase_key.json")
 
-st.set_page_config(page_title="Aptitude Dashboard", layout="wide")
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(cred)
+db = firestore.client()
 
-st.title("📊 Aptitude Test Dashboard")
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(page_title="Faculty Evaluation Dashboard", layout="wide")
+st.title("🎓 Faculty Evaluation Dashboard")
 
-# Load data
-df = pd.read_csv("results.csv")
+# ---------------- LOAD STUDENT RESPONSES ----------------
+collection_ref = db.collection("student_responses")
+docs = list(collection_ref.stream())
+if not docs:
+    st.warning("No student data found in Firestore.")
+    st.stop()
 
-# -----------------------------
-# Summary Section
-# -----------------------------
-col1, col2, col3 = st.columns(3)
-col1.metric("Total Students", len(df))
-col2.metric("Average Score", f"{df['Score'].mean():.2f}")
-col3.metric("Max Score", df['Score'].max())
+data = []
+for doc in docs:
+    d = doc.to_dict()
+    for r in d.get("Responses", []):
+        q_text = r.get("Question", "")
+        # Auto-detect paragraphs (even if CSV wrongly labels them)
+        if (
+            "?" not in q_text
+            and len(q_text) > 180
+            and q_text.count(".") >= 2
+        ):
+            q_type = "info"
+        else:
+            q_type = r.get("Type", "short")
 
-# -----------------------------
-# Search Section
-# -----------------------------
-st.subheader("🔍 Search for Student")
+        data.append({
+            "Name": d.get("Name"),
+            "Roll": d.get("Roll"),
+            "Section": d.get("Section"),
+            "QuestionID": r.get("QuestionID"),
+            "Question": q_text,
+            "Response": r.get("Response"),
+            "Type": q_type,
+        })
+df = pd.DataFrame(data)
 
-search = st.text_input("Enter Student Name or Roll Number", "").strip().lower()
+# ---------------- STUDENT SELECTION ----------------
+students = sorted(df["Roll"].unique().tolist())
+selected_student = st.selectbox("Select Student Roll Number", students)
 
-if search:
-    filtered_df = df[df.apply(lambda row: search in str(row['Name']).lower() or search in str(row['Roll']).lower(), axis=1)]
-else:
-    filtered_df = df
+student_df = df[df["Roll"] == selected_student]
+if student_df.empty:
+    st.info("No data found for this student.")
+    st.stop()
 
-# -----------------------------
-# Student Table
-# -----------------------------
-filtered_df = filtered_df.reset_index(drop=True)
-filtered_df.index = filtered_df.index + 1
-st.write("### Students List (Click a row to view details)")
-st.dataframe(filtered_df, width="stretch")
+st.subheader(f"📋 Evaluation for {student_df.iloc[0]['Name']} ({selected_student})")
 
-# -----------------------------
-# Individual Visualization (Final Streamlit-Only Fix)
-# -----------------------------
-if not filtered_df.empty:
-    st.write("### Individual Student Visualization")
+# ---------------- FILTER TYPES ----------------
+eval_df = student_df[student_df["Type"].isin(["likert", "short", "descriptive", "info"])].copy()
+if eval_df.empty:
+    st.info("No evaluable questions for this student.")
+    st.stop()
 
-    # Input to quickly find a student
-    search_name = st.text_input("Enter Student Name or Roll No to find quickly", "").strip().lower()
+# ---------------- LOAD EXISTING MARKS ----------------
+mark_docs = db.collection("faculty_marks").stream()
+mark_data = [d.to_dict() for d in mark_docs if d.to_dict().get("Roll") == selected_student]
+marks_df = pd.DataFrame(mark_data) if mark_data else pd.DataFrame(columns=["QuestionID", "Marks"])
+eval_df = eval_df.merge(marks_df, on="QuestionID", how="left")
 
-    # --- Filter student list ---
-    if search_name:
-        matched_students = filtered_df[
-            filtered_df.apply(
-                lambda row: search_name in str(row["Name"]).lower() or search_name in str(row["Roll"]).lower(),
-                axis=1,
+# ---------------- STYLING ----------------
+st.markdown("""
+<style>
+div[data-testid="stHorizontalBlock"] { margin-bottom: -6px !important; }
+div[class*="stRadio"] { margin-top: -8px !important; margin-bottom: -8px !important; }
+.block-container { padding-top: 1rem; padding-bottom: 1rem; }
+
+.qtext { font-size:16px; font-weight:600; color:#111; margin-bottom:3px; }
+.qresp { font-size:15px; color:#333; margin-top:-4px; margin-bottom:4px; }
+
+.infoblock {
+    background-color:#f8f9fa;
+    padding:14px 18px;
+    border-left:5px solid #007bff;
+    border-radius:6px;
+    margin:8px 0 12px 0;
+    font-size:16px;
+    line-height:1.5;
+}
+
+.back-to-top {
+    position: fixed; bottom: 40px; right: 40px;
+    background-color: #007bff; color: white;
+    border: none; padding: 10px 16px;
+    border-radius: 8px; font-weight: 600;
+    cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    z-index: 9999;
+}
+.back-to-top:hover { background-color: #0056b3; }
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------- MARK ENTRY SECTION ----------------
+marks_state = {}
+sections = eval_df["Section"].unique().tolist()
+grand_total = 0
+grand_max = 0
+
+for section in sections:
+    sec_df = eval_df[eval_df["Section"] == section]
+    st.markdown(f"## 🧾 {section}")
+
+    section_total = 0
+    q_counter = 1
+
+    for _, row in sec_df.iterrows():
+        qid = row["QuestionID"]
+        qtext = row["Question"]
+        qtype = row["Type"]
+        response = str(row["Response"]) if pd.notna(row["Response"]) else "(No response)"
+        prev_mark = int(row["Marks"]) if not pd.isna(row["Marks"]) else 0
+
+        # ✅ INFO TYPE
+        if qtype == "info":
+            st.markdown(f"<div class='infoblock'>{qtext}</div>", unsafe_allow_html=True)
+            continue
+
+        # ✅ EVALUABLE QUESTION
+        col1, col2 = st.columns([10, 2])
+        with col1:
+            st.markdown(
+                f"""
+                <div class='qtext'>Q{q_counter}: {qtext}</div>
+                <div class='qresp'>🧩 <i>Student Response:</i> <b>{response}</b></div>
+                """,
+                unsafe_allow_html=True
             )
-        ]
-    else:
-        matched_students = filtered_df
-
-    if matched_students.empty:
-        st.warning("No matching student found.")
-    else:
-        selected = st.selectbox("Select student to visualize", matched_students["Name"].unique(), index=0)
-        student = df[df["Name"] == selected].iloc[0]
-
-        st.success(f"Showing results for **{student['Name']}** ({student['Roll']})")
-
-        # ---- Anchor marker for scrolling ----
-        scroll_anchor = st.empty()  # invisible placeholder
-        scroll_anchor.markdown("<div id='chart_start'></div>", unsafe_allow_html=True)
-
-        # ---- Charts ----
-        fig_pie = go.Figure(
-            go.Pie(
-                labels=["Correct", "Incorrect"],
-                values=[student["Score"], student["Total"] - student["Score"]],
-                hole=0.5,
-                marker_colors=["#4CAF50", "#E74C3C"],
+        with col2:
+            marks_state[qid] = st.radio(
+                label="",
+                options=[0, 1],
+                index=prev_mark,
+                horizontal=True,
+                key=f"{selected_student}_{section}_{qid}"
             )
-        )
-        fig_pie.update_layout(title_text="Score Distribution", width=420, height=350)
+            section_total += marks_state[qid]
+        q_counter += 1
 
-        fig_gauge = go.Figure(
-            go.Indicator(
-                mode="gauge+number",
-                value=student["Score"],
-                title={"text": "Student Score"},
-                gauge={
-                    "axis": {"range": [0, student["Total"]]},
-                    "bar": {"color": "#4CAF50"},
-                    "steps": [
-                        {"range": [0, student["Total"] * 0.5], "color": "#FFDDDD"},
-                        {"range": [student["Total"] * 0.5, student["Total"]], "color": "#D4EFDF"},
-                    ],
-                },
-            )
-        )
-        fig_gauge.update_layout(width=420, height=350)
+    st.markdown(f"**Subtotal for {section}: {section_total}/{len(sec_df[sec_df['Type']!='info'])}**")
+    st.markdown("---")
 
-        col1, col2 = st.columns(2)
-        col1.plotly_chart(fig_pie, config={"displayModeBar": False})
-        col2.plotly_chart(fig_gauge, config={"displayModeBar": False})
+    grand_total += section_total
+    grand_max += len(sec_df[sec_df['Type'] != 'info'])
 
-        # ---- Scroll the chart into view (pure Streamlit way) ----
-        # When user presses Enter, Streamlit reruns from top — we re-render here,
-        # so this block executes after rerun and scrolls immediately to the anchor
-        st.markdown(
-            """
-            <script>
-                document.getElementById('chart_start').scrollIntoView({behavior: 'smooth', block: 'start'});
-            </script>
-            """,
-            unsafe_allow_html=True,
-        )
+# ---------------- SAVE BUTTON ----------------
+if st.button("💾 Save All Marks"):
+    for qid, mark in marks_state.items():
+        db.collection("faculty_marks").document(f"{selected_student}_{qid}").set({
+            "Roll": selected_student,
+            "QuestionID": qid,
+            "Marks": int(mark),
+            "Evaluator": "Faculty",
+            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+    st.success("✅ All marks saved successfully!")
+
+# ---------------- TOTAL MARKS ----------------
+st.metric(label="🏅 Total Marks (All Sections)", value=f"{grand_total}/{grand_max}")
+
+# ---------------- BACK TO TOP ----------------
+st.markdown("""
+<a href="#top" class="back-to-top">⬆ Back to Top</a>
+""", unsafe_allow_html=True)
