@@ -1,181 +1,132 @@
 import streamlit as st
+import pandas as pd
+import io
+import json
 import firebase_admin
 from firebase_admin import credentials, firestore
-import pandas as pd
-import json
 from datetime import datetime
 
-# ---------------- FIREBASE INIT ----------------
-try:
-    firebase_config = json.loads(st.secrets["firebase_key"])
-    cred = credentials.Certificate(firebase_config)
-except Exception:
-    cred = credentials.Certificate("firebase_key.json")
-
-if not firebase_admin._apps:
-    firebase_admin.initialize_app(cred)
-db = firestore.client()
-
-# ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Faculty Evaluation Dashboard", layout="wide")
 st.title("🎓 Faculty Evaluation Dashboard")
 
-# ---------------- LOAD STUDENT RESPONSES ----------------
-collection_ref = db.collection("student_responses")
-docs = list(collection_ref.stream())
+# ---------- Firebase init ----------
+def get_firestore():
+    try:
+        key_dict = dict(st.secrets["google_service_account"])
+        key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
+        cred = credentials.Certificate(key_dict)
+    except Exception:
+        cred = credentials.Certificate("firebase_key.json")
+    if not firebase_admin._apps:
+        firebase_admin.initialize_app(cred)
+    return firestore.client()
+
+db = get_firestore()
+
+# ---------- Load student responses from Firestore ----------
+docs = list(db.collection("student_responses").stream())
 if not docs:
     st.warning("No student data found in Firestore.")
     st.stop()
 
-data = []
-for doc in docs:
-    d = doc.to_dict()
-    for r in d.get("Responses", []):
-        q_text = r.get("Question", "")
-        # Auto-detect paragraphs (even if CSV wrongly labels them)
-        if (
-            "?" not in q_text
-            and len(q_text) > 180
-            and q_text.count(".") >= 2
-        ):
-            q_type = "info"
-        else:
-            q_type = r.get("Type", "short")
-
-        data.append({
-            "Name": d.get("Name"),
-            "Roll": d.get("Roll"),
-            "Section": d.get("Section"),
+rows = []
+for d in docs:
+    rec = d.to_dict()
+    for r in rec.get("Responses", []):
+        if str(r.get("Type", "")).lower() in ["mcq", "info"]:
+            continue  # faculty grades only non-auto
+        rows.append({
+            "Name": rec.get("Name"),
+            "Roll": rec.get("Roll"),
+            "Section": rec.get("Section"),
             "QuestionID": r.get("QuestionID"),
-            "Question": q_text,
+            "Question": r.get("Question"),
             "Response": r.get("Response"),
-            "Type": q_type,
+            "Type": r.get("Type"),
+            "Timestamp": rec.get("Timestamp"),
         })
-df = pd.DataFrame(data)
 
-# ---------------- STUDENT SELECTION ----------------
-students = sorted(df["Roll"].unique().tolist())
-selected_student = st.selectbox("Select Student Roll Number", students)
-
-student_df = df[df["Roll"] == selected_student]
-if student_df.empty:
-    st.info("No data found for this student.")
+df = pd.DataFrame(rows)
+if df.empty:
+    st.info("No gradable questions found.")
     st.stop()
 
-st.subheader(f"📋 Evaluation for {student_df.iloc[0]['Name']} ({selected_student})")
+rolls = sorted(df["Roll"].unique().tolist())
+selected_roll = st.selectbox("Select Student Roll Number", rolls)
+student_df = df[df["Roll"] == selected_roll]
 
-# ---------------- FILTER TYPES ----------------
-eval_df = student_df[student_df["Type"].isin(["likert", "short", "descriptive", "info"])].copy()
-if eval_df.empty:
-    st.info("No evaluable questions for this student.")
-    st.stop()
+st.subheader(f"📋 Evaluation for {student_df.iloc[0]['Name']} ({selected_roll})")
 
-# ---------------- LOAD EXISTING MARKS ----------------
-mark_docs = db.collection("faculty_marks").stream()
-mark_data = [d.to_dict() for d in mark_docs if d.to_dict().get("Roll") == selected_student]
-marks_df = pd.DataFrame(mark_data) if mark_data else pd.DataFrame(columns=["QuestionID", "Marks"])
-eval_df = eval_df.merge(marks_df, on="QuestionID", how="left")
-
-# ---------------- STYLING ----------------
-st.markdown("""
-<style>
-div[data-testid="stHorizontalBlock"] { margin-bottom: -6px !important; }
-div[class*="stRadio"] { margin-top: -8px !important; margin-bottom: -8px !important; }
-.block-container { padding-top: 1rem; padding-bottom: 1rem; }
-
-.qtext { font-size:16px; font-weight:600; color:#111; margin-bottom:3px; }
-.qresp { font-size:15px; color:#333; margin-top:-4px; margin-bottom:4px; }
-
-.infoblock {
-    background-color:#f8f9fa;
-    padding:14px 18px;
-    border-left:5px solid #007bff;
-    border-radius:6px;
-    margin:8px 0 12px 0;
-    font-size:16px;
-    line-height:1.5;
-}
-
-.back-to-top {
-    position: fixed; bottom: 40px; right: 40px;
-    background-color: #007bff; color: white;
-    border: none; padding: 10px 16px;
-    border-radius: 8px; font-weight: 600;
-    cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-    z-index: 9999;
-}
-.back-to-top:hover { background-color: #0056b3; }
-</style>
-""", unsafe_allow_html=True)
-
-# ---------------- MARK ENTRY SECTION ----------------
+# ---------- Marks entry ----------
 marks_state = {}
-sections = eval_df["Section"].unique().tolist()
+sections = student_df["Section"].unique().tolist()
 grand_total = 0
 grand_max = 0
 
 for section in sections:
-    sec_df = eval_df[eval_df["Section"] == section]
+    sec_df = student_df[student_df["Section"] == section]
     st.markdown(f"## 🧾 {section}")
 
     section_total = 0
-    q_counter = 1
+    section_max = len(sec_df)
+    q_counter = 0
 
-    for _, row in sec_df.iterrows():
+    for _, row in sec_df.sort_values("QuestionID").iterrows():
+        q_counter += 1
         qid = row["QuestionID"]
         qtext = row["Question"]
-        qtype = row["Type"]
-        response = str(row["Response"]) if pd.notna(row["Response"]) else "(No response)"
-        prev_mark = int(row["Marks"]) if not pd.isna(row["Marks"]) else 0
+        resp = "" if pd.isna(row["Response"]) else str(row["Response"])
 
-        # ✅ INFO TYPE
-        if qtype == "info":
-            st.markdown(f"<div class='infoblock'>{qtext}</div>", unsafe_allow_html=True)
-            continue
-
-        # ✅ EVALUABLE QUESTION
         col1, col2 = st.columns([10, 2])
         with col1:
-            st.markdown(
-                f"""
-                <div class='qtext'>Q{q_counter}: {qtext}</div>
-                <div class='qresp'>🧩 <i>Student Response:</i> <b>{response}</b></div>
-                """,
-                unsafe_allow_html=True
-            )
+            st.markdown(f"**Q{q_counter}: {qtext}**")
+            st.markdown(f"🧩 *Student Response:* **{resp}**")
         with col2:
-            marks_state[qid] = st.radio(
-                label="",
-                options=[0, 1],
-                index=prev_mark,
-                horizontal=True,
-                key=f"{selected_student}_{section}_{qid}"
+            marks_state[(selected_roll, qid)] = st.radio(
+                label="", options=[0, 1], index=0, horizontal=True,
+                key=f"{selected_roll}_{section}_{qid}"
             )
-            section_total += marks_state[qid]
-        q_counter += 1
+            section_total += marks_state[(selected_roll, qid)]
 
-    st.markdown(f"**Subtotal for {section}: {section_total}/{len(sec_df[sec_df['Type']!='info'])}**")
+    st.markdown(f"**Subtotal for {section}: {section_total}/{section_max}**")
     st.markdown("---")
-
     grand_total += section_total
-    grand_max += len(sec_df[sec_df['Type'] != 'info'])
+    grand_max += section_max
 
-# ---------------- SAVE BUTTON ----------------
+st.metric("🏅 Total Marks (All Sections)", f"{grand_total}/{grand_max}")
+
+# ---------- Save marks to Firestore ----------
 if st.button("💾 Save All Marks"):
-    for qid, mark in marks_state.items():
-        db.collection("faculty_marks").document(f"{selected_student}_{qid}").set({
-            "Roll": selected_student,
-            "QuestionID": qid,
-            "Marks": int(mark),
-            "Evaluator": "Faculty",
-            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        })
-    st.success("✅ All marks saved successfully!")
+    try:
+        batch = db.batch()
+        for (roll, qid), mark in marks_state.items():
+            doc_id = f"{roll}_{qid}"
+            ref = db.collection("faculty_marks").document(doc_id)
+            batch.set(ref, {
+                "Roll": roll,
+                "QuestionID": qid,
+                "Marks": int(mark),
+                "Evaluator": "Faculty",
+                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            })
+        batch.commit()
+        st.success("✅ All marks saved.")
+    except Exception as e:
+        st.error(f"❌ Failed to save marks: {e}")
 
-# ---------------- TOTAL MARKS ----------------
-st.metric(label="🏅 Total Marks (All Sections)", value=f"{grand_total}/{grand_max}")
+# ---------- Export all data to Excel ----------
+st.markdown("### ⬇️ Export to Excel")
+expander = st.expander("Preview export data")
+expander.dataframe(df, use_container_width=True)
 
-# ---------------- BACK TO TOP ----------------
-st.markdown("""
-<a href="#top" class="back-to-top">⬆ Back to Top</a>
-""", unsafe_allow_html=True)
+output = io.BytesIO()
+with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+    df.to_excel(writer, sheet_name="Responses", index=False)
+excel_bytes = output.getvalue()
+
+st.download_button(
+    "📥 Download Excel",
+    data=excel_bytes,
+    file_name=f"student_responses_{datetime.now():%Y%m%d_%H%M}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+)
