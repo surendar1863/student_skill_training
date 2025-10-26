@@ -7,120 +7,81 @@ from datetime import datetime
 st.set_page_config(page_title="Student Edge Assessment", layout="wide")
 st.title("🎓 Student Edge Assessment Portal")
 
-# ---------------------- FIREBASE ----------------------
-@st.cache_resource
-def init_firebase():
+# Initialize Firebase
+if not firebase_admin._apps:
     try:
-        # Check if secrets exist
-        if "firebase" not in st.secrets:
-            st.error("❌ Firebase secrets not found in Streamlit secrets")
-            return None
-        
-        # Create service account dict from secrets
-        service_account_info = {
-            "type": "service_account",
+        cred_dict = {
+            "type": st.secrets["firebase"]["type"],
             "project_id": st.secrets["firebase"]["project_id"],
             "private_key_id": st.secrets["firebase"]["private_key_id"],
             "private_key": st.secrets["firebase"]["private_key"].replace('\\n', '\n'),
             "client_email": st.secrets["firebase"]["client_email"],
             "client_id": st.secrets["firebase"]["client_id"],
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "auth_uri": st.secrets["firebase"]["auth_uri"],
+            "token_uri": st.secrets["firebase"]["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["firebase"]["auth_provider_x509_cert_url"],
             "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"]
         }
-        
-        # Initialize Firebase
-        if not firebase_admin._apps:
-            cred = credentials.Certificate(service_account_info)
-            firebase_admin.initialize_app(cred)
-        
-        return firestore.client()
+        cred = credentials.Certificate(cred_dict)
+        firebase_admin.initialize_app(cred)
     except Exception as e:
-        st.error(f"❌ Firebase initialization failed: {str(e)}")
-        return None
+        st.error(f"Firebase init error: {e}")
 
-db = init_firebase()
+db = firestore.client()
 
-# ---------------------- GOOGLE SHEETS ----------------------
-@st.cache_resource
-def connect_sheet(sheet_name="Student_Responses"):
+# Google Sheets setup
+def init_sheets():
     try:
-        # Use the same service account for Sheets
-        service_account_info = {
-            "type": "service_account",
+        gc = gspread.service_account_from_dict({
+            "type": st.secrets["firebase"]["type"],
             "project_id": st.secrets["firebase"]["project_id"],
             "private_key_id": st.secrets["firebase"]["private_key_id"],
             "private_key": st.secrets["firebase"]["private_key"].replace('\\n', '\n'),
             "client_email": st.secrets["firebase"]["client_email"],
             "client_id": st.secrets["firebase"]["client_id"],
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "auth_uri": st.secrets["firebase"]["auth_uri"],
+            "token_uri": st.secrets["firebase"]["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["firebase"]["auth_provider_x509_cert_url"],
             "client_x509_cert_url": st.secrets["firebase"]["client_x509_cert_url"]
-        }
-        
-        gc = gspread.service_account_from_dict(service_account_info)
-        sh = gc.open(sheet_name)
-        return sh.sheet1
+        })
+        sheet = gc.open("Student_Responses").sheet1
+        return sheet
     except Exception as e:
-        st.error(f"❌ Google Sheets connection failed: {e}")
+        st.error(f"Sheets error: {e}")
         return None
 
-sheet = connect_sheet()
+sheet = init_sheets()
 
-# ---------------------- FORM ----------------------
+# Form
 with st.form("student_form"):
     name = st.text_input("Name")
-    roll = st.text_input("Roll Number (e.g., 25BCAR123)")
+    roll = st.text_input("Roll Number")
     section = st.selectbox("Section", ["Aptitude", "Communication Skills", "Adaptability"])
-    q1 = st.text_area("1️⃣ Describe a situation where you solved a problem creatively.")
-    q2 = st.slider("2️⃣ Rate your adaptability to change (1–5)", 1, 5, 3)
-    submitted = st.form_submit_button("Submit Response ✅")
+    q1 = st.text_area("Describe a situation where you solved a problem creatively.")
+    q2 = st.slider("Rate your adaptability to change (1-5)", 1, 5, 3)
+    submitted = st.form_submit_button("Submit")
 
 if submitted:
-    if not name or not roll:
-        st.warning("⚠️ Please fill all details before submitting.")
-        st.stop()
-
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    data = {
-        "Timestamp": timestamp,
-        "Name": name,
-        "Roll": roll,
-        "Section": section,
-        "Responses": {"Q1": q1, "Q2": q2},
-    }
-
-    success_firestore = False
-    success_sheets = False
-
-    try:
-        # Save to Firestore
-        if db:
-            db.collection("student_responses").document(f"{roll}_{section}").set(data)
-            success_firestore = True
-            st.success("✅ Data saved to Firestore")
-        else:
-            st.warning("⚠️ Firebase not available - skipping Firestore save")
-    except Exception as e:
-        st.error(f"❌ Firestore save error: {e}")
-
-    try:
-        # Save to Google Sheet
-        if sheet:
-            sheet.append_row([timestamp, name, roll, section, q1, str(q2)])
-            success_sheets = True
-            st.success("✅ Data saved to Google Sheets")
-        else:
-            st.warning("⚠️ Google Sheets not available - skipping Sheets save")
-    except Exception as e:
-        st.error(f"❌ Google Sheets save error: {e}")
-
-    if success_firestore and success_sheets:
-        st.balloons()
-        st.success("🎉 Submission saved successfully to both Firestore and Google Sheets!")
-    elif success_firestore or success_sheets:
-        st.info("📝 Submission partially saved (check above for details)")
+    if name and roll:
+        data = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "name": name,
+            "roll": roll,
+            "section": section,
+            "q1": q1,
+            "q2": q2
+        }
+        
+        try:
+            # Save to Firestore
+            db.collection("responses").add(data)
+            
+            # Save to Sheets
+            if sheet:
+                sheet.append_row([data["timestamp"], name, roll, section, q1, q2])
+            
+            st.success("Data saved successfully!")
+        except Exception as e:
+            st.error(f"Save error: {e}")
     else:
-        st.error("❌ Failed to save data. Please try again.")
+        st.warning("Please fill name and roll number")
