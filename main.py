@@ -2,27 +2,30 @@ import streamlit as st
 import pandas as pd
 import firebase_admin
 from firebase_admin import credentials, firestore
-import json
 import time
 
 # ---------------- FIREBASE CONNECTION ----------------
-try:
-    firebase_config = json.loads(st.secrets["firebase_key"])
-    cred = credentials.Certificate(firebase_config)
-except Exception:
-    cred = credentials.Certificate("firebase_key.json")
+@st.cache_resource
+def init_firebase():
+    try:
+        if not firebase_admin._apps:
+            # Use the CORRECT secret name that matches your secrets.toml
+            cred_dict = dict(st.secrets["firebase"])
+            cred = credentials.Certificate(cred_dict)
+            firebase_admin.initialize_app(cred)
+        return firestore.client()
+    except Exception as e:
+        st.error(f"❌ Firebase initialization failed: {e}")
+        return None
 
-if not firebase_admin._apps:
-    firebase_admin.initialize_app(cred)
-
-db = firestore.client()
+db = init_firebase()
 
 # ---------------- CSV FILES ----------------
 files = {
     "Aptitude Test": "aptitude.csv",
     "Adaptability & Learning": "adaptability_learning.csv",
-    "Communication Skills - Objective": "communcation_skills_objective.csv",
-    "Communication Skills - Descriptive": "communcation_skills_descriptive.csv",
+    "Communication Skills - Objective": "communication_skills_objective.csv",
+    "Communication Skills - Descriptive": "communication_skills_descriptive.csv",
 }
 
 # ---------------- PAGE CONFIG ----------------
@@ -39,7 +42,12 @@ if name and roll:
     section = st.selectbox("Select Section", list(files.keys()))
 
     if section:
-        df = pd.read_csv(files[section])
+        try:
+            df = pd.read_csv(files[section])
+        except FileNotFoundError:
+            st.error(f"❌ File '{files[section]}' not found. Please check the file name.")
+            st.stop()
+
         st.subheader(f"📘 {section}")
         st.write("Answer all the questions below and click **Submit**.")
 
@@ -67,7 +75,7 @@ if name and roll:
                     min_value=scale_min,
                     max_value=scale_max,
                     value=(scale_min + scale_max) // 2,
-                    key=f"q{idx}"
+                    key=f"q{idx}_{section}"
                 )
 
             # ---- Multiple Choice ----
@@ -78,14 +86,14 @@ if name and roll:
                     if pd.notna(row.get(f"Option{i}")) and str(row.get(f"Option{i}")).strip() != ""
                 ]
                 if options:
-                    response = st.radio("Your Answer:", options, key=f"q{idx}")
+                    response = st.radio("Your Answer:", options, key=f"q{idx}_{section}")
                 else:
                     st.warning(f"No options available for {qid}")
                     response = ""
 
             # ---- Short / Descriptive ----
             elif qtype == "short":
-                response = st.text_area("Your Answer:", key=f"q{idx}")
+                response = st.text_area("Your Answer:", key=f"q{idx}_{section}")
 
             # ---- Unknown / Empty ----
             else:
@@ -102,24 +110,29 @@ if name and roll:
 
         # ---------------- SUBMIT ----------------
         if st.button("✅ Submit"):
-            with st.spinner("Saving your responses..."):
-                data = {
-                    "Name": name,
-                    "Roll": roll,
-                    "Section": section,
-                    "Timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "Responses": responses,
-                }
-                db.collection("student_responses").document(
-                    f"{roll}_{section.replace(' ', '_')}"
-                ).set(data)
-
-                st.success("Your responses have been successfully submitted!")
+            if not db:
+                st.error("❌ Database connection failed. Cannot save responses.")
+            else:
+                with st.spinner("Saving your responses..."):
+                    data = {
+                        "Name": name,
+                        "Roll": roll,
+                        "Section": section,
+                        "Timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "Responses": responses,
+                    }
+                    try:
+                        db.collection("student_responses").document(
+                            f"{roll}_{section.replace(' ', '_')}"
+                        ).set(data)
+                        st.success("✅ Your responses have been successfully submitted!")
+                    except Exception as e:
+                        st.error(f"❌ Error saving to database: {e}")
 
 else:
     st.info("👆 Please enter your Name and Roll Number to start.")
 
-# ---------------- BACK TO TOP BUTTON (Always visible) ----------------
+# ---------------- BACK TO TOP BUTTON ----------------
 st.markdown("""
 <style>
 #back-to-top {
