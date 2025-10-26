@@ -1,129 +1,94 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+import time
 import json
-import os
+import firebase_admin
+from firebase_admin import credentials, firestore
 
-st.set_page_config(page_title="Student Edge Assessment", layout="wide")
-st.title("🎓 Student Edge Assessment Portal")
+st.set_page_config(page_title="Student Edge – Submit", layout="wide")
+st.title("🧠 Student Edge Assessment Portal")
 
-# Initialize data file
-DATA_FILE = "student_responses.json"
+# ---------- Firebase init (Firestore only) ----------
+def get_firestore():
+    try:
+        key_dict = dict(st.secrets["google_service_account"])
+        # normalize PEM newlines (prevents Invalid JWT Signature)
+        key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
+        cred = credentials.Certificate(key_dict)
+    except Exception:
+        # optional local fallback if you ever run locally with a file:
+        cred = credentials.Certificate("firebase_key.json")
 
-def load_data():
-    """Load existing data from JSON file"""
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r') as f:
-            return json.load(f)
-    return []
+    if not firebase_admin._apps:
+        firebase_admin.initialize_app(cred)
+    return firestore.client()
 
-def save_data(data):
-    """Save data to JSON file"""
-    with open(DATA_FILE, 'w') as f:
-        json.dump(data, f, indent=2)
+db = get_firestore()
 
-def export_to_excel():
-    """Export data to Excel format"""
-    data = load_data()
-    if data:
-        df = pd.DataFrame(data)
-        return df
-    return pd.DataFrame()
+# ---------- CSV files per section ----------
+files = {
+    "Aptitude Test": "aptitude.csv",
+    "Adaptability & Learning": "adaptability_learning.csv",
+    "Communication Skills - Objective": "communcation_skills_objective.csv",
+    "Communication Skills - Descriptive": "communcation_skills_descriptive.csv",
+}
 
-# Student Form
-st.header("📝 Student Response Form")
+# ---------- Student details ----------
+name = st.text_input("Enter Your Name")
+roll = st.text_input("Enter Roll Number (e.g., 25BBAB170)")
 
-with st.form("student_form"):
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        name = st.text_input("Full Name *")
-        roll = st.text_input("Roll Number * (e.g., 25BCAR123)")
-    
-    with col2:
-        section = st.selectbox("Section *", 
-                             ["Aptitude", "Communication Skills", "Adaptability"])
-        q2 = st.slider("Rate your adaptability to change (1-5) *", 1, 5, 3)
-    
-    q1 = st.text_area("Describe a situation where you solved a problem creatively. *", 
-                     height=120)
-    
-    submitted = st.form_submit_button("Submit Response ✅")
+if not (name and roll):
+    st.info("👆 Please enter your Name and Roll Number to start.")
+    st.stop()
 
-if submitted:
-    if not all([name, roll, q1]):
-        st.warning("⚠️ Please fill all required fields")
-        st.stop()
+section = st.selectbox("Select Section", list(files.keys()))
+if not section:
+    st.stop()
 
-    # Create response data
-    response_data = {
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "name": name.strip(),
-        "roll": roll.strip().upper(),
-        "section": section,
-        "problem_solving_response": q1.strip(),
-        "adaptability_rating": q2
-    }
+df = pd.read_csv(files[section])
+st.subheader(f"📘 {section}")
+st.write("Answer all the questions below and click **Submit**.")
 
-    # Load existing data
-    all_data = load_data()
-    
-    # Add new response
-    all_data.append(response_data)
-    
-    # Save to file
-    save_data(all_data)
-    
-    st.success("✅ Response saved successfully!")
-    st.balloons()
+responses = []
+for idx, row in df.iterrows():
+    qid = row.get("QuestionID", f"Q{idx+1}")
+    text = str(row.get("Question", "")).strip()
+    qtype = str(row.get("Type", "")).strip().lower()
 
-# Admin Section
-st.sidebar.header("📊 Admin Panel")
+    if qtype == "info":
+        st.markdown(f"### 📝 {text}")
+        st.markdown("---")
+        continue
 
-# Show statistics
-data = load_data()
-if data:
-    st.sidebar.success(f"Total Responses: {len(data)}")
-    
-    # Section breakdown
-    sections = [item['section'] for item in data]
-    section_counts = pd.Series(sections).value_counts()
-    
-    st.sidebar.write("**Responses by Section:**")
-    for section, count in section_counts.items():
-        st.sidebar.write(f"- {section}: {count}")
-else:
-    st.sidebar.info("No responses yet")
+    st.markdown(f"**Q{idx+1}. {text}**")
 
-# Export to Excel
-if st.sidebar.button("📥 Export to Excel"):
-    df = export_to_excel()
-    if not df.empty:
-        # Create Excel file
-        excel_file = "student_responses.xlsx"
-        df.to_excel(excel_file, index=False)
-        
-        # Provide download link
-        with open(excel_file, "rb") as f:
-            excel_data = f.read()
-        
-        st.sidebar.download_button(
-            label="⬇️ Download Excel File",
-            data=excel_data,
-            file_name=f"student_responses_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        
-        # Show preview
-        st.sidebar.write("**Data Preview:**")
-        st.sidebar.dataframe(df.tail(5))
-    else:
-        st.sidebar.warning("No data to export")
+    if qtype == "likert":
+        v = st.slider("Your Response:", 1, 5, 3, key=f"q{idx}")
+    elif qtype == "mcq":
+        options = [str(row.get(f"Option{i}", "")).strip()
+                   for i in range(1, 5)
+                   if pd.notna(row.get(f"Option{i}")) and str(row.get(f"Option{i}")).strip()]
+        v = st.radio("Your Answer:", options, key=f"q{idx}") if options else ""
+    else:  # short / descriptive
+        v = st.text_area("Your Answer:", key=f"q{idx}")
 
-# Display all responses (optional)
-if st.checkbox("Show All Responses"):
-    data = load_data()
-    if data:
-        st.dataframe(pd.DataFrame(data))
-    else:
-        st.info("No responses yet")
+    responses.append({"QuestionID": qid, "Question": text, "Response": v, "Type": qtype})
+    st.markdown("---")
+
+# ---------- Submit ----------
+if st.button("✅ Submit"):
+    with st.spinner("Saving your responses..."):
+        data = {
+            "Name": name,
+            "Roll": roll,
+            "Section": section,
+            "Timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "Responses": responses,
+        }
+        try:
+            # Use a doc per (Roll, Section)
+            doc_id = f"{roll}_{section.replace(' ', '_')}"
+            db.collection("student_responses").document(doc_id).set(data)
+            st.success("✅ Saved to Firestore.")
+        except Exception as e:
+            st.error(f"❌ Firestore save error: {e}")
