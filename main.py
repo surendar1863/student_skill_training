@@ -44,7 +44,7 @@ files = {
 
 # ---- inputs ----
 name = st.text_input("Enter Your Name (letters only)", value="")
-roll  = st.text_input("Enter Roll Number (e.g., 24bbab110)", value="")
+roll  = st.text_input("Enter Roll Number (e.g., 25BBAB001)", value="")
 
 # ---- validator (must be defined before you use it) ----
 def valid_name(n: str) -> bool:
@@ -173,6 +173,7 @@ if name and roll:
 
 else:
     st.info("👆 Please enter your Name and Roll Number to start.")
+
 
 
 
