@@ -56,8 +56,7 @@ if name and roll:
     
     if section == "Communication Skills - Descriptive":
         st.info("📝 Q1 to Q10 - Find the error and correct the sentence.")
-        st.stop()
-                
+               
     if section:
         try:
             df = pd.read_csv(files[section])
@@ -175,6 +174,7 @@ st.markdown("""
     ⬆️ Back to Top
 </button>
 """, unsafe_allow_html=True)
+
 
 
 
