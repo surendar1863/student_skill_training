@@ -6,7 +6,7 @@ import time
 import json
 import re
 # ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="Student Edge Assessment", layout="wide")
+st.set_page_config(page_title="Student Skill Training", layout="wide")
 st.title("🧠 Student Skill Training Assessment")
 
 # ---------------- FIREBASE CONNECTION ----------------
@@ -190,6 +190,7 @@ h1, .stTitle {
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 
 
