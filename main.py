@@ -46,24 +46,6 @@ files = {
 name = st.text_input("Enter Your Name (letters only)", value="")
 roll  = st.text_input("Enter Roll Number (e.g., 24bbab110)", value="")
 
-# ---- validator (must be defined before you use it) ----
-def valid_name(n: str) -> bool:
-    if not isinstance(n, str):
-        return False
-    n = n.strip()
-    if not n:
-        return False
-    # letters + single spaces between words (no digits/symbols)
-    return bool(re.fullmatch(r"[A-Za-z]+(?: [A-Za-z]+)*", n))
-
-name_ok = valid_name(name)
-
-# live feedback
-if name and not name_ok:
-    st.error("Name should contain only letters and spaces (e.g., 'Ravi Kumar').")
-
-# normalized title case, if you want to save/display neatly
-clean_name = " ".join(part.capitalize() for part in name.split()) if name_ok else name
 
 # ---------------- MAIN APP ----------------
 if name and roll:
@@ -172,6 +154,7 @@ if name and roll:
 
 else:
     st.info("👆 Please enter your Name and Roll Number to start.")
+
 
 
 
