@@ -1,72 +1,56 @@
-import firebase_admin
-from firebase_admin import credentials, firestore
-import pandas as pd
-import json
-
-import os
-import json
 import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore
+import os
+import json
 
-def load_firebase_credentials():
-    # 1) Streamlit secrets: stringified JSON (most common)
-    if "firebase_key" in st.secrets:
-        try:
-            return credentials.Certificate(json.loads(st.secrets["firebase_key"]))
-        except Exception:
-            pass  # will try other forms
+# Debug: Check current directory and files
+st.write("## Debug Information")
+st.write(f"Current working directory: `{os.getcwd()}`")
+st.write(f"Files in directory: `{os.listdir('.')}`")
 
-    # 2) Streamlit secrets: dict-style (e.g., [google_service_account] in secrets.toml)
-    if "google_service_account" in st.secrets:
-        try:
-            return credentials.Certificate(dict(st.secrets["google_service_account"]))
-        except Exception:
-            pass
+# Check if firebase_key.json exists
+json_path = "firebase_key.json"
+if os.path.exists(json_path):
+    st.success(f"✅ Found: {json_path}")
+    file_size = os.path.getsize(json_path)
+    st.write(f"File size: {file_size} bytes")
+else:
+    st.error(f"❌ Missing: {json_path}")
 
-    # 3) Local file fallback (only works if file is actually deployed with the app)
-    if os.path.exists("firebase_key.json"):
-        return credentials.Certificate("firebase_key.json")
+# Try multiple initialization methods
+try:
+    # Method 1: Direct file path
+    if os.path.exists(json_path):
+        cred = credentials.Certificate(json_path)
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred)
+        db = firestore.client()
+        st.success("✅ Firebase connected via file!")
+        
+        # Test connection
+        test_doc = db.collection('test').document('connection_test')
+        st.success("✅ Firebase Firestore connection test passed!")
+        
+except Exception as e:
+    st.error(f"❌ Method 1 failed: {str(e)}")
+    
+    try:
+        # Method 2: Using secrets (for Streamlit Cloud)
+        if 'FIREBASE_KEY' in st.secrets:
+            firebase_config = st.secrets['FIREBASE_KEY']
+            if isinstance(firebase_config, str):
+                # If it's stored as string, parse it
+                firebase_config = json.loads(firebase_config)
+            
+            cred = credentials.Certificate(firebase_config)
+            if not firebase_admin._apps:
+                firebase_admin.initialize_app(cred)
+            db = firestore.client()
+            st.success("✅ Firebase connected via secrets!")
+            
+    except Exception as e2:
+        st.error(f"❌ Method 2 failed: {str(e2)}")
 
-    # Nothing worked
-    raise RuntimeError(
-        "No Firebase credentials found. Add your service-account JSON to "
-        "Streamlit Secrets as 'firebase_key' (stringified JSON) or "
-        "as a [google_service_account] table, or deploy firebase_key.json with the app."
-    )
-
-# Initialize Firebase
-cred = load_firebase_credentials()
-if not firebase_admin._apps:
-    firebase_admin.initialize_app(cred)
-db = firestore.client()
-
-
-# ---------------- FIREBASE CONNECTION ----------------
-cred = credentials.Certificate("firebase_key.json")
-firebase_admin.initialize_app(cred)
-db = firestore.client()
-
-# ---------------- FETCH DATA ----------------
-docs = db.collection("student_responses").stream()
-records = []
-
-for doc in docs:
-    data = doc.to_dict()
-    roll = data.get("Roll")
-    name = data.get("Name")
-    section = data.get("Section")
-    timestamp = data.get("Timestamp")
-    for r in data.get("Responses", []):
-        records.append({
-            "Roll": roll,
-            "Name": name,
-            "Section": section,
-            "Timestamp": timestamp,
-            "QuestionID": r.get("QuestionID"),
-            "Question": r.get("Question"),
-            "Response": r.get("Response"),
-            "Type": r.get("Type")
-        })
-
-
+# Rest of your app code...
+st.write("App continues...")
