@@ -138,17 +138,27 @@ if name and roll:
                         "Responses": responses,
                     }
                     try:
-                        db.collection("student_responses").document(
+                        # ✅ Use document ID based on roll and section
+                        doc_ref = db.collection("student_responses").document(
                             f"{roll}_{section.replace(' ', '_')}"
-                        ).set(data)
-                        st.success("✅ Your responses have been successfully submitted!")
+                        )
+        
+                        # ✅ This will overwrite the same document instead of creating a duplicate
+                        doc_ref.set(data, merge=True)
+        
+                        st.success("✅ Your responses have been successfully submitted (updated if existing)!")
                     except Exception as e:
                         st.error(f"❌ Error saving to database: {e}")
+    st.markdown(
+        "<p style='color:#007BFF; font-weight:600;'>⌨️ Press <b>Home</b> on the keyboard to return to the top of the page.</p>",
+        unsafe_allow_html=True,
+    )
 
 else:
     st.info("👆 Please enter your Name and Roll Number to start.")
 
 st.markdown("<p style='color:#007BFF; font-weight:600;'>⌨️ Press <b>Home</b> on the keyboard to return to the top of the page.</p>", unsafe_allow_html=True)
+
 
 
 
