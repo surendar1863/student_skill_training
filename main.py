@@ -186,10 +186,11 @@ div.block-container {
 
 /* Nudge the h1 title if you want it even closer to the top */
 h1, .stTitle {
-    margin-top: -1.2rem;      /* make more negative to move further up */
+    margin-top: -0.5rem;      /* make more negative to move further up */
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 
 
