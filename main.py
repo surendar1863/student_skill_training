@@ -157,7 +157,7 @@ if name and roll:
 else:
     st.info("👆 Please enter your Name and Roll Number to start.")
 
-st.markdown("<p style='color:#007BFF; font-weight:600;'>⌨️ Press <b>Home</b> on the keyboard to return to the top of the page.</p>", unsafe_allow_html=True)
+
 
 
 
