@@ -5,21 +5,37 @@ import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
+import firebase_admin
+from firebase_admin import credentials, firestore
+import json
 
 st.set_page_config(page_title="Faculty Evaluation Dashboard", layout="wide")
 st.title("🎓 Faculty Evaluation Dashboard")
 
-# ---------- Firebase init ----------
+db = get_firestore()
+
+@st.cache_resource
 def get_firestore():
     try:
-        key_dict = dict(st.secrets["google_service_account"])
-        key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
-        cred = credentials.Certificate(key_dict)
-    except Exception:
-        cred = credentials.Certificate("firebase_key.json")
-    if not firebase_admin._apps:
-        firebase_admin.initialize_app(cred)
-    return firestore.client()
+        if not firebase_admin._apps:
+            # ✅ Use Streamlit secrets on the cloud
+            if "firebase" in st.secrets:
+                firebase_config = dict(st.secrets["firebase"])
+                cred = credentials.Certificate(firebase_config)
+                firebase_admin.initialize_app(cred)
+                st.success("✅ Firebase connected using Streamlit secrets!")
+            else:
+                # ✅ Local fallback (for testing locally)
+                st.warning("⚠️ Using local firebase_key.json file.")
+                with open("firebase_key.json", "r", encoding="utf-8") as f:
+                    firebase_config = json.load(f)
+                cred = credentials.Certificate(firebase_config)
+                firebase_admin.initialize_app(cred)
+        return firestore.client()
+    except Exception as e:
+        st.error(f"❌ Firebase initialization failed: {e}")
+        return None
+
 
 db = get_firestore()
 
@@ -130,3 +146,4 @@ st.download_button(
     file_name=f"student_responses_{datetime.now():%Y%m%d_%H%M}.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 )
+
