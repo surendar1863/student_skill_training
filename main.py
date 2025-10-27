@@ -4,6 +4,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import time
 import json
+import re
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Student Edge Assessment", layout="wide")
 st.title("🧠 Student Edge Assessment Portal")
@@ -173,6 +174,7 @@ if name and roll:
 
 else:
     st.info("👆 Please enter your Name and Roll Number to start.")
+
 
 
 
