@@ -7,7 +7,7 @@ import json
 import re
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Student Edge Assessment", layout="wide")
-st.title("🧠 Student Edge Assessment Portal")
+st.title("🧠 Student Skill Training Assessment Portal")
 
 # ---------------- FIREBASE CONNECTION ----------------
 @st.cache_resource
@@ -190,6 +190,7 @@ h1, .stTitle {
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 
 
