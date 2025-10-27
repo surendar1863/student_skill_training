@@ -72,9 +72,8 @@ clean_name = " ".join(part.capitalize() for part in name.split()) if name_ok els
 
 # ---------------- MAIN APP ----------------
 if name and roll:
-    st.success(f"Welcome, {name}! Please choose a test section below.")
+    st.success(f"Welcome, {name}! Please Choose a Test in the Dropdown Below.")
     section = st.selectbox("Select Section", list(files.keys()))
-
     
     if section == "Communication Skills - Descriptive":
         st.info("📝 Q1 to Q10 - Find the error and correct the sentence.")
@@ -178,6 +177,7 @@ if name and roll:
 
 else:
     st.info("👆 Please enter your Name and Roll Number to start.")
+
 
 
 
