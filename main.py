@@ -8,72 +8,6 @@ import re
 
 import streamlit as st
 
-st.set_page_config(
-    page_title="Your App",
-    menu_items={'Get Help': None, 'Report a bug': None, 'About': None}
-)
-
-hide_style = """
-    <style>
-    /* Hide all potential Streamlit branding elements */
-    #MainMenu, footer, header, .stDeployButton, #stDecoration {display: none;}
-    
-    /* Target elements by data-testid */
-    [data-testid="stHeader"],
-    [data-testid="stToolbar"], 
-    [data-testid="collapsedControl"],
-    [data-testid="baseButton-header"] {display: none !important;}
-    
-    /* Remove empty space at top */
-    .main .block-container {padding-top: 2rem;}
-    
-    /* Hide any iframe that might contain branding */
-    iframe[title="stDecoration"] {display: none;}
-    </style>
-"""
-st.markdown(hide_style, unsafe_allow_html=True)
-
-import streamlit as st
-import streamlit.components.v1 as components
-
-st.set_page_config(
-    page_title="Your App", 
-    menu_items={'Get Help': None, 'Report a bug': None, 'About': None}
-)
-
-# JavaScript to dynamically remove elements
-js_code = """
-<script>
-function hideStreamlitBranding() {
-    // Remove header
-    const header = document.querySelector('[data-testid="stHeader"]');
-    if (header) header.style.display = 'none';
-    
-    // Remove toolbar
-    const toolbar = document.querySelector('[data-testid="stToolbar"]');
-    if (toolbar) toolbar.style.display = 'none';
-    
-    // Remove collapsed control (profile area)
-    const collapsed = document.querySelector('[data-testid="collapsedControl"]');
-    if (collapsed) collapsed.style.display = 'none';
-    
-    // Remove deploy button
-    const deployBtn = document.querySelector('.stDeployButton');
-    if (deployBtn) deployBtn.style.display = 'none';
-    
-    // Remove any footer elements
-    const footers = document.querySelectorAll('footer');
-    footers.forEach(footer => footer.style.display = 'none');
-}
-
-// Run immediately and also on interval to catch dynamically added elements
-hideStreamlitBranding();
-setInterval(hideStreamlitBranding, 1000);
-</script>
-"""
-
-components.html(js_code, height=0, width=0)
-
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Student Skill Training", layout="wide")
 st.title("🧠 Student Skill Training Assessment")
@@ -259,6 +193,7 @@ h1, .stTitle {
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 
 
