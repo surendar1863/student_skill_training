@@ -43,11 +43,6 @@ files = {
 }
 
 # ---------------- STUDENT DETAILS ----------------
-name = st.text_input("Enter Your Name")
-
-roll = st.text_input("Enter Roll Number (e.g., 24bbab110)")
-
- ---- inputs ----
 name = st.text_input("Enter Your Name (letters only)", value="")
 roll  = st.text_input("Enter Roll Number (e.g., 24bbab110)", value="")
 
@@ -177,6 +172,7 @@ if name and roll:
 
 else:
     st.info("👆 Please enter your Name and Roll Number to start.")
+
 
 
 
