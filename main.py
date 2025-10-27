@@ -51,15 +51,6 @@ files = {
 # ---------------- STUDENT DETAILS ----------------
 name = st.text_input("Enter Your Name")
 
-
-name_ok = valid_name(name) if name else False
-
-# Optional: show an error as the user types
-if name and not name_ok:
-    st.error("Name should contain only letters and spaces (e.g., 'Ravi Kumar').")
-
-# Optional: normalized (title case) version to use everywhere in the app
-clean_name = " ".join(w.capitalize() for w in name.split()) if name_ok else name
 roll = st.text_input("Enter Roll Number (e.g., 24bbab110)")
 
 # ---------------- MAIN APP ----------------
@@ -170,6 +161,7 @@ if name and roll:
 
 else:
     st.info("👆 Please enter your Name and Roll Number to start.")
+
 
 
 
