@@ -180,8 +180,8 @@ st.markdown(
 <style>
 /* Reduce the default top padding of the main content area */
 div.block-container{
-    padding-top: 0.8rem;      /* default is ~6rem; lower = higher on the page */
-    padding-bottom: 1.5rem;   /* optional: keep a bit of bottom space */
+    padding-top: 0.8 rem;      /* default is ~6rem; lower = higher on the page */
+    padding-bottom: 1.5 rem;   /* optional: keep a bit of bottom space */
 }
 
 /* Nudge the page title up a bit more */
@@ -190,6 +190,7 @@ h1, .stTitle {
 }
 </style>
 , unsafe_allow_html=True)
+
 
 
 
