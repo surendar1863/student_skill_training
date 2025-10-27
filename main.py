@@ -180,16 +180,17 @@ st.markdown("""
 <style>
 /* Pull the whole page content up a bit */
 div.block-container {
-    padding-top: 1.7rem;      /* default is ~6rem; lower = higher on the page */
+    padding-top: 2.0rem;      /* default is ~6rem; lower = higher on the page */
     padding-bottom: 1.5rem;   /* optional */
 }
 
 /* Nudge the h1 title if you want it even closer to the top */
 h1, .stTitle {
-    margin-top: -0.8rem;      /* make more negative to move further up */
+    margin-top: -1.2rem;      /* make more negative to move further up */
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 
 
