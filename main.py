@@ -148,28 +148,7 @@ if name and roll:
 else:
     st.info("👆 Please enter your Name and Roll Number to start.")
 
-# ---------------- BACK TO TOP BUTTON ----------------
-st.markdown("""
-<style>
-#back-to-top {
-    position: fixed;
-    bottom: 40px;
-    right: 40px;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    padding: 12px 18px;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-    z-index: 1000;
-}
-</style>
-<button id="back-to-top" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
-    ⬆️ Back to Top
-</button>
-""", unsafe_allow_html=True)
+st.markdown("<p style='color:#007BFF; font-weight:600;'>⌨️ Press <b>Home</b> on the keyboard to return to the top of the page.</p>", unsafe_allow_html=True)
 
 
 
