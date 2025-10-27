@@ -176,20 +176,22 @@ else:
     st.info("👆 Please enter your Name and Roll Number to start.")
 
 # Tighten top spacing so title & fields sit higher
-st.markdown(
+st.markdown("""
 <style>
-/* Reduce the default top padding of the main content area */
-div.block-container{
-    padding-top: 0.8 rem;      /* default is ~6rem; lower = higher on the page */
-    padding-bottom: 1.5 rem;   /* optional: keep a bit of bottom space */
+/* Pull the whole page content up a bit */
+div.block-container {
+    padding-top: 0.8rem;      /* default is ~6rem; lower = higher on the page */
+    padding-bottom: 1.5rem;   /* optional */
 }
 
-/* Nudge the page title up a bit more */
+/* Nudge the h1 title if you want it even closer to the top */
 h1, .stTitle {
-    margin-top: -0.8rem;      /* adjust as you like: -0.5rem to -1.5rem */
+    margin-top: -0.8rem;      /* make more negative to move further up */
 }
 </style>
-, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
+
+
 
 
 
