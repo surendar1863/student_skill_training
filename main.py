@@ -52,7 +52,7 @@ roll = st.text_input("Enter Roll Number (e.g., 24bbab110)")
 if name and roll:
     st.success(f"Welcome, {name}! Please choose a test section below.")
     section = st.selectbox("Select Section", list(files.keys()))
-
+    
     if section:
         try:
             df = pd.read_csv(files[section])
@@ -112,6 +112,10 @@ if name and roll:
                 st.info(f"⚠️ Unknown question type '{qtype}' for {qid}.")
                 response = ""
 
+            if section == "Communication Skills - Descriptive":
+                st.info("📝 Q1 to Q10 - Find the error and correct the sentence.")
+                st.stop()
+                
             responses.append({
                 "QuestionID": qid,
                 "Question": qtext,
@@ -166,6 +170,7 @@ st.markdown("""
     ⬆️ Back to Top
 </button>
 """, unsafe_allow_html=True)
+
 
 
 
