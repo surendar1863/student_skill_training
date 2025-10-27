@@ -5,27 +5,33 @@ from firebase_admin import credentials, firestore
 import time
 import json
 import re
-# Remove all Streamlit branding
+
+import streamlit as st
+
 st.set_page_config(
-    page_title="My Custom App",
-    layout="wide",
-    menu_items={
-        'Get Help': None,
-        'Report a bug': None,
-        'About': None
-    }
+    page_title="Your App",
+    menu_items={'Get Help': None, 'Report a bug': None, 'About': None}
 )
 
-# Hide Streamlit style
-hide_streamlit_style = """
+hide_style = """
     <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    .stDeployButton {display:none;}
+    /* Hide all potential Streamlit branding elements */
+    #MainMenu, footer, header, .stDeployButton, #stDecoration {display: none;}
+    
+    /* Target elements by data-testid */
+    [data-testid="stHeader"],
+    [data-testid="stToolbar"], 
+    [data-testid="collapsedControl"],
+    [data-testid="baseButton-header"] {display: none !important;}
+    
+    /* Remove empty space at top */
+    .main .block-container {padding-top: 2rem;}
+    
+    /* Hide any iframe that might contain branding */
+    iframe[title="stDecoration"] {display: none;}
     </style>
 """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+st.markdown(hide_style, unsafe_allow_html=True)
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Student Skill Training", layout="wide")
@@ -212,6 +218,7 @@ h1, .stTitle {
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 
 
