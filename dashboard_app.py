@@ -53,26 +53,28 @@ def init_firebase():
     except Exception as e:
         st.error(f"Firebase initialization failed: {str(e)}")
         return None
-
-# Initialize Firebase
-db = init_firebase()
-
-if db:
-    st.success("✅ Firebase connected successfully via Secrets!")
-    
-    # Test the connection
+@st.cache_resource
+def init_firebase():
     try:
-        # Try to read a document to verify connection
-        test_ref = db.collection('users').limit(1)
-        docs = test_ref.stream()
-        st.success("✅ Firebase Firestore connection verified!")
+        if firebase_admin._apps:
+            return firestore.client()
+
+        # Works with secrets.toml [firebase]
+        if "firebase" in st.secrets:
+            config = st.secrets["firebase"]
+
+            # If private_key contains \n instead of real newlines
+            if "\\n" in config["private_key"]:
+                config["private_key"] = config["private_key"].replace("\\n", "\n")
+
+            cred = credentials.Certificate(config)
+            firebase_admin.initialize_app(cred)
+            return firestore.client()
+        else:
+            st.error("Firebase configuration not found in secrets under [firebase]!")
+            return None
+
     except Exception as e:
-        st.warning(f"⚠️ Connected but test query failed: {e}")
-    
-    # Your actual app code continues here...
-    st.title("Student Skill Training Dashboard")
-    # ... rest of your dashboard code ...
-    
-else:
-    st.error("❌ Firebase connection failed!")
-    st.stop()
+        st.error(f"Firebase initialization failed: {e}")
+        return None
+
