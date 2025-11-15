@@ -3,6 +3,10 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import json
 import pandas as pd
+st.write("Secrets visible to app:", list(st.secrets.keys()))
+st.write("Firebase section exists:", "firebase" in st.secrets)
+if "firebase" in st.secrets:
+    st.write(st.secrets["firebase"])
 
 # -------------------------------
 # STREAMLIT CONFIG
@@ -96,3 +100,4 @@ if uploaded_csv:
             data = doc.to_dict()
 
             st.markdown(f"### 🧑‍🎓 Student Name: **{data.get('Name','Unknown')}**")
+
